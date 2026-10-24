@@ -1,81 +1,95 @@
-# TraderTax HQ: automated marketing system
+# TraderTaxHQ: automated marketing system
 
-A self-hosted marketing system for a tax practice that serves active traders. It captures leads, qualifies them, nurtures them by email, writes the content each week, schedules it across social channels, sends deadline campaigns and reports the numbers to you. Nothing goes out until you approve it.
+The automated marketing system for [www.tradertaxhq.com](https://www.tradertaxhq.com): tax preparation and guidance for prop firm, funded account, futures, forex, options and crypto traders. It captures leads, qualifies them against TraderTaxHQ's pricing plans and nurtures them toward **Start Basic Intake**. Each week it writes content that links back to the site's `/resources` guides, schedules social posts, sends deadline reminders and reports the numbers. Nothing goes out until you approve it.
 
 ```
- Traffic (SEO blog, social, ads with UTM tags)
-        │
-        ▼
- Landing page + 60-second Trader Tax Quiz ──► Lead scoring (0-100, hot / warm / nurture)
-        │                                        │  segment: futures · options · equities · prop · crypto
-        │                                        │  TTS-likely flag + recommended service
-        ▼                                        ▼
- Playbook (lead magnet)              Nurture sequence (welcome → segment email → TTS check → mistakes → last call)
-                                     Hot lead → personal note within 1 hour + instant alert to the owner
-                                                 │
- Booking webhook (Calendly / Cal.com) ──────────►│ stops the sequence when they book
-                                                 ▼
- Weekly content engine (Claude or templates) ──► Blog post + newsletter + 7 social posts + video script
-        │  topic picked from the tax calendar         │ compliance scan + disclaimer
-        ▼                                             ▼
- Admin dashboard: approve / edit / reject ──► Scheduled publishing (webhook to Zapier / Make / Buffer)
-                                              Thursday newsletter to all subscribers
- Tax-deadline reminders (14 and 3 days before) ─► segment-targeted broadcast emails
- Monday KPI report ─► owner inbox
+ Main site (Lovable)                          This app (e.g. go.tradertaxhq.com)
+ ─────────────────────                        ─────────────────────────────────────────────
+ Checklist email form ──POST /api/subscribe──►  Lead store + scoring (0-100, hot/warm/nurture)
+ Basic Intake (/get-started) ──Zapier──► POST /api/webhooks/intake  → stops nurture
+                                              Campaign page "/" Prop Firm Tax Check quiz (for ads,
+                                                 affiliates, social; ?ref=CODE tracks affiliates)
+                                              /checklist  2026 Prop Firm Trader Tax Checklist
+                                                    │
+                                                    ▼
+                                              Nurture emails (welcome → segment → estimates →
+                                                 mistakes → last call), hot lead → personal note +
+                                                 owner alert with likely plan and upsells
+                                                    │
+ /resources/<new article> ◄── copy / download ──  Weekly content pack (Claude or templates):
+                                                 article · newsletter · 7 social posts · video script
+                                                 compliance scan + approval in /admin
+                                                    │
+                                              Social webhook (Zapier/Make/Buffer), Thursday 7pm
+                                              newsletter, deadline reminders (14 + 3 days),
+                                              Monday KPI report to info@tradertaxhq.com
 ```
+
+## What's tailored to TraderTaxHQ
+
+- **Segments, in priority order:** prop firm traders first (Topstep, Apex, TradeDay, FundingTicks, FTMO), then own-account futures, forex, stocks/options and crypto.
+- **Plan fit** comes from the pricing page: Starter $297, Essential $497, Professional $997, Enterprise from $2,497. Bookkeeping and IRS-notice support are flagged as upsells.
+- **Every CTA** goes to Start Basic Intake (`/get-started`) with UTM tags, so the site's analytics shows which emails and posts drive intakes.
+- **Content** follows the site's own positioning: start with the payout arrangement, not the instrument. Evaluation fees may be current expenses or startup costs. Payouts from foreign firms are still reportable.
+- **Compliance:** every email and article states "run by a tax advisor (not a CPA or EA)". The scanner blocks "CPA firm", "enrolled agent", "represent you before the IRS", "guarantee" and unqualified savings claims.
+- **Timing:** posts and the newsletter go out after the futures session, and on weekends, to match "evenings & weekends".
 
 ## Quick start
 
 ```bash
 cd tradertax-marketing
 npm install
-cp .env.example .env      # set ADMIN_TOKEN, APP_SECRET, BOOKING_URL, OWNER_EMAIL, MAILING_ADDRESS
-npm start                 # http://localhost:3000  ·  dashboard at /admin
+cp .env.example .env      # set ADMIN_TOKEN, APP_SECRET, MAILING_ADDRESS, PUBLIC_URL, WEBHOOK_SECRET
+npm start                 # http://localhost:3000 (quiz) · /checklist · /admin
 npm test
 ```
 
-With no other keys set, the system runs safely. Emails go to `data/outbox/` as HTML files, social posts are logged as dry runs, and content comes from built-in templates.
+With no other keys set, nothing leaves the system. Emails are written to `data/outbox/`, social posts are logged as dry runs, and content comes from built-in templates.
+
+## Connecting it to www.tradertaxhq.com
+
+1. **Host this app** on a subdomain such as `go.tradertaxhq.com` (Railway, Render, Fly.io or a VPS with a persistent disk for `data/`). Set `PUBLIC_URL` to that subdomain.
+2. **Checklist form → email list.** In the site's checklist form, add a POST when "Email Me & Download" is clicked:
+   ```js
+   fetch('https://go.tradertaxhq.com/api/subscribe', {
+     method: 'POST', headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ email, firstName, consent: true, source: 'main-site-checklist' }),
+   });
+   ```
+   `www.tradertaxhq.com` is allowed by CORS by default (`ALLOWED_ORIGINS`).
+3. **Basic Intake → stop the nurture.** Use Zapier/Make (or the intake's own submit handler) to POST `{ "email": "..." }` to `/api/webhooks/intake?secret=WEBHOOK_SECRET`. Booked consultations can POST to `/api/webhooks/booking?secret=...`.
+4. **Articles.** Approve an article in `/admin`, then use **Copy Markdown** or **Download .md** (with title, slug, description and quick-answer front matter) and publish it under `/resources`. This app serves no public blog, and it is `noindex`, so it never competes with the main site in search.
+5. **Affiliates.** Give partners `https://go.tradertaxhq.com/?ref=THEIRCODE`. Leads carry the code, and the weekly report counts referrals per affiliate.
 
 ## Turning on each piece
 
 | Feature | Setting | Notes |
 |---|---|---|
-| AI-written content | `ANTHROPIC_API_KEY` | Uses Claude (`claude-opus-5-5` by default) with structured JSON output. Server-side refusal fallbacks are on (`CLAUDE_FALLBACKS=true`). If a call fails, the template pack is used and the error appears in the dashboard. |
-| Real email | `EMAIL_PROVIDER=resend` + `RESEND_API_KEY`, or `postmark` + `POSTMARK_TOKEN` | Verify your sending domain (SPF/DKIM/DMARC) first. Every email includes one-click unsubscribe and your mailing address (CAN-SPAM). |
-| Social posting | `SOCIAL_WEBHOOK_URL` (or `SOCIAL_WEBHOOK_URL_X`, `_LINKEDIN`, `_FACEBOOK`, `_INSTAGRAM`) | Receives `{channel, text, link, postId, scheduledFor}`. Point it at a Zapier/Make/n8n/Buffer flow that posts to the network. |
-| Stop nurture on booking | `BOOKING_WEBHOOK_SECRET` | In Calendly/Cal.com, add a webhook to `https://your-site/api/webhooks/booking?secret=...`. It reads `email`, `payload.email` or `payload.invitee.email`. |
-| Approval gate | `REQUIRE_APPROVAL=true` (default) | Blog, newsletter and every post wait in `/admin`. Content that fails the compliance scan always waits, whatever this is set to. |
+| AI-written content | `ANTHROPIC_API_KEY` | Claude (`claude-opus-5-5`) with structured JSON output. Server-side refusal fallbacks are on (`CLAUDE_FALLBACKS=true`). If a call fails, the template pack is used and the error shows in the dashboard. |
+| Real email | `EMAIL_PROVIDER=resend` + `RESEND_API_KEY`, or `postmark` + `POSTMARK_TOKEN` | Verify the tradertaxhq.com sending domain (SPF/DKIM/DMARC). Each email includes one-click unsubscribe and `MAILING_ADDRESS`, which CAN-SPAM requires (a PO box is fine). |
+| Social posting | `SOCIAL_WEBHOOK_URL` or per-channel `SOCIAL_WEBHOOK_URL_X` / `_LINKEDIN` / `_FACEBOOK` / `_INSTAGRAM` | Receives `{channel, text, link, postId, scheduledFor}`. |
+| Approval gate | `REQUIRE_APPROVAL=true` (default) | Content that fails the compliance scan always waits for approval, whatever this is set to. |
 
 ## Customizing
 
-- **`config/business.js`**: brand, voice, offers and prices, audience segments, banned phrases, disclaimer, posting schedule and channels.
-- **`config/tax-calendar.js`**: deadlines and the topic bank. Topics have seasons and priorities, and a topic is not reused for 8 weeks.
+- **`config/business.js`**: brand, voice, plans and prices, segments, banned phrases, disclaimer, schedule.
+- **`config/tax-calendar.js`**: deadlines and the topic bank. Each topic links to the matching `/resources` guide.
 - **`src/email/sequences.js`**: nurture email copy for each segment.
-- **`src/scoring.js`**: quiz scoring weights and which offer goes to which lead.
+- **`src/scoring.js`**: quiz weights and plan-fit rules.
 
 ## Running jobs
 
-The server runs its own scheduler every minute (`SCHEDULER=on`). Jobs run only once each, so restarts and repeated ticks are safe:
-
-- Monday 06:00: generate the week's content pack and place posts into the week's slots
-- Monday 08:00: KPI report emailed to the owner
-- Every minute: send due emails, publish approved posts, send the approved newsletter Thursday at 07:00, and queue deadline reminders
-
-If you prefer external cron, set `SCHEDULER=off` and run `npm run cli -- tick` every few minutes. Other commands:
+The built-in scheduler ticks every minute. Each job runs only once per week or deadline, so restarts are safe. To use external cron instead, set `SCHEDULER=off` and run `npm run cli -- tick`. Other commands:
 
 ```bash
-npm run cli -- generate [topicId]   # build a pack now (see: npm run cli -- topics)
-npm run cli -- deadlines 120        # upcoming deadlines
-npm run cli -- stats 30             # KPIs for the last 30 days
-npm run cli -- report               # send the KPI report now
+npm run cli -- generate prop-payouts   # build a pack now (list ids: npm run cli -- topics)
+npm run cli -- deadlines 120           # upcoming deadlines
+npm run cli -- stats 30                # KPIs for the last 30 days
+npm run cli -- report                  # send the KPI report now
 ```
 
-## Deploying
+## Notes
 
-Run it as one always-on Node 20+ service (Railway, Render, Fly.io or a small VPS) with a persistent disk for `data/`. Put it behind HTTPS and set `PUBLIC_URL` to the public domain. Data lives in `data/db.json`, which is written atomically. That is enough for a single practice. Back it up, or move it to Postgres if you outgrow it.
-
-## Compliance notes
-
-- Built-in copy is educational and every long-form piece ends with the disclaimer. The scanner blocks promissory language ("guarantee", "pay no tax", unqualified "save $X" claims, and others).
-- Tax figures in the playbook and emails (60/40 rates, SE tax, safe-harbor percentages, the 475(f) deadline) reflect current federal rules. Check them each tax season, and have a credentialed preparer review AI-written drafts before you approve them.
+- Tax figures in the checklist and emails reflect current federal rules. Re-check them each season and review AI-written drafts before approving.
 - The quiz score is a sales-priority signal, not a Trader Tax Status determination.
+- Weekend deadlines roll forward automatically. Holidays and IRS disaster extensions are not modeled.

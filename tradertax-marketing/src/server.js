@@ -1,5 +1,9 @@
-// HTTP server: public funnel (landing quiz, playbook, blog, unsubscribe),
-// booking webhook, admin dashboard API and the built-in scheduler.
+// HTTP server: campaign funnel (tax-check quiz landing page, checklist,
+// unsubscribe), lead + subscribe APIs the main site can post to, conversion
+// webhooks, admin dashboard API and the built-in scheduler.
+//
+// Articles are published on www.tradertaxhq.com/resources, not here, so this
+// app serves no public blog (avoids duplicate content) and is noindex.
 import './env.js';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -9,18 +13,33 @@ import business from '../config/business.js';
 import { topics } from '../config/tax-calendar.js';
 import { ROOT } from './env.js';
 import { Store } from './db.js';
-import { verifyUnsubscribe, markdownToHtml } from './email/sender.js';
+import { verifyUnsubscribe } from './email/sender.js';
+import { checkCompliance } from './compliance.js';
 import {
-  captureLead, setLeadStatus, approveContent, rejectContent, runWeeklyContent, weeklyStats, tick,
+  captureLead, setLeadStatus, approveContent, rejectContent, runWeeklyContent, weeklyStats, tick, LEAD_STATUSES,
 } from './engine.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const allowedOrigins = () => (process.env.ALLOWED_ORIGINS || `${business.brand.mainSite},https://tradertaxhq.com`)
+  .split(',').map((s) => s.trim()).filter(Boolean);
 
-function send(res, status, body, type = 'application/json') {
+function send(res, status, body, type = 'application/json', extra = {}) {
   const payload = type === 'application/json' ? JSON.stringify(body) : body;
-  res.writeHead(status, { 'Content-Type': `${type}; charset=utf-8`, 'X-Content-Type-Options': 'nosniff' });
+  res.writeHead(status, {
+    'Content-Type': `${type}; charset=utf-8`, 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex', ...extra,
+  });
   res.end(payload);
+}
+
+function cors(req, res) {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins().includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
 }
 
 async function readJson(req, limit = 100_000) {
@@ -47,7 +66,7 @@ function isAdmin(req) {
   return Boolean(process.env.ADMIN_TOKEN) && safeEqual(token, process.env.ADMIN_TOKEN);
 }
 
-// Basic per-IP limiter for the public lead endpoint.
+// Basic per-IP limiter for the public lead endpoints.
 const hits = new Map();
 function rateLimited(ip, max = 10, windowMs = 3600000) {
   const now = Date.now();
@@ -57,58 +76,60 @@ function rateLimited(ip, max = 10, windowMs = 3600000) {
   return recent.length > max;
 }
 
-function page(title, bodyHtml, description = business.brand.tagline) {
+function page(title, bodyHtml) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}">
-<link rel="stylesheet" href="/styles.css"></head><body><header class="top"><a href="/" class="logo">${escapeHtml(business.brand.name)}</a>
-<nav><a href="/blog">Blog</a><a href="/playbook">Free Playbook</a><a class="btn small" href="${escapeHtml(business.brand.bookingUrl)}">Book a call</a></nav></header>
-<main class="wrap">${bodyHtml}</main><footer class="foot"><p>${escapeHtml(business.compliance.disclaimer)}</p><p>${escapeHtml(business.brand.mailingAddress)}</p></footer></body></html>`;
+<meta name="robots" content="noindex"><title>${escapeHtml(title)}</title><link rel="stylesheet" href="/styles.css"></head><body>
+<header class="top"><a href="${escapeHtml(business.brand.mainSite)}" class="logo">Trader<span>Tax</span>HQ</a>
+<nav><a class="btn small" href="${escapeHtml(business.brand.intakeUrl)}">Start Basic Intake</a></nav></header>
+<main class="wrap">${bodyHtml}</main><footer class="foot"><p>${escapeHtml(business.compliance.disclaimer)}</p></footer></body></html>`;
 }
 
-const publishedPosts = (store) => store
-  .filter('contentPacks', (p) => p.blog.status === 'published')
-  .sort((a, b) => new Date(b.blog.publishedAt) - new Date(a.blog.publishedAt));
+const html = (file) => fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+const clientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
 
 export function createServer(store = new Store()) {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const route = `${req.method} ${url.pathname}`;
     try {
-      // ---------------- public funnel
-      if (route === 'GET /' || route === 'GET /admin') {
-        const file = url.pathname === '/' ? 'index.html' : 'admin.html';
-        return send(res, 200, fs.readFileSync(path.join(PUBLIC, file), 'utf8'), 'text/html');
-      }
-      if (route === 'GET /styles.css') return send(res, 200, fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8'), 'text/css');
-      if (route === 'GET /playbook') return send(res, 200, fs.readFileSync(path.join(PUBLIC, 'playbook.html'), 'utf8'), 'text/html');
-      if (route === 'GET /healthz') return send(res, 200, { ok: true });
-      if (route === 'GET /api/config') {
-        return send(res, 200, {
-          brand: { name: business.brand.name, tagline: business.brand.tagline, bookingUrl: business.brand.bookingUrl },
-          leadMagnet: business.offers.leadMagnet, segments: Object.fromEntries(Object.entries(business.segments).map(([k, v]) => [k, v.label])),
-          disclaimer: business.compliance.disclaimer,
-        });
+      if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/')) {
+        cors(req, res);
+        res.writeHead(204);
+        return res.end();
       }
 
-      if (route === 'POST /api/leads') {
-        const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
-        if (rateLimited(ip)) return send(res, 429, { error: 'Too many requests' });
+      // ---------------- campaign funnel
+      if (route === 'GET /') return send(res, 200, html('index.html'), 'text/html');
+      if (route === 'GET /admin') return send(res, 200, html('admin.html'), 'text/html');
+      if (route === 'GET /checklist') return send(res, 200, html('checklist.html'), 'text/html');
+      if (route === 'GET /playbook') return send(res, 301, '', 'text/plain', { Location: '/checklist' });
+      if (route === 'GET /styles.css') return send(res, 200, html('styles.css'), 'text/css');
+      if (route === 'GET /robots.txt') return send(res, 200, 'User-agent: *\nDisallow: /\n', 'text/plain');
+      if (route === 'GET /healthz') return send(res, 200, { ok: true });
+
+      // Quiz submissions (this app's landing page) and the main site's forms.
+      if (route === 'POST /api/leads' || route === 'POST /api/subscribe') {
+        cors(req, res);
+        if (rateLimited(clientIp(req))) return send(res, 429, { error: 'Too many requests' });
         const body = await readJson(req);
         if (body.website) return send(res, 200, { ok: true }); // honeypot: bots fill hidden fields
-        const { lead, isNew } = captureLead(store, body);
+        const input = route.endsWith('subscribe')
+          ? { email: body.email, firstName: body.firstName, consent: body.consent, source: body.source || 'main-site-checklist', utm: body.utm, ref: body.ref }
+          : body;
+        const { lead, isNew } = captureLead(store, input);
         return send(res, isNew ? 201 : 200, {
-          ok: true, tier: lead.tier, segment: lead.segment, ttsLikely: lead.ttsLikely,
-          bookingUrl: business.brand.bookingUrl, playbookUrl: business.offers.leadMagnet.path,
+          ok: true, tier: lead.tier, segment: lead.segment, plan: lead.recommendedService,
+          intakeUrl: business.brand.intakeUrl, checklistUrl: business.offers.leadMagnet.path,
         });
       }
 
       if (route === 'GET /unsubscribe') {
         const id = url.searchParams.get('id');
         if (!verifyUnsubscribe(id, url.searchParams.get('t')) || !store.get('leads', id)) {
-          return send(res, 400, page('Unsubscribe', '<h1>Link not valid</h1><p>Reply to any email and we will remove you manually.</p>'), 'text/html');
+          return send(res, 400, page('Unsubscribe', `<h1>Link not valid</h1><p>Email <a href="mailto:${escapeHtml(business.brand.fromEmail)}">${escapeHtml(business.brand.fromEmail)}</a> and we will remove you.</p>`), 'text/html');
         }
         setLeadStatus(store, id, 'unsubscribed');
-        return send(res, 200, page('Unsubscribed', '<h1>You are unsubscribed</h1><p>You will not receive any more marketing emails from us.</p>'), 'text/html');
+        return send(res, 200, page('Unsubscribed', '<h1>You are unsubscribed</h1><p>You will not receive any more marketing emails from TraderTaxHQ.</p>'), 'text/html');
       }
       if (route === 'POST /unsubscribe') { // RFC 8058 one-click
         const id = url.searchParams.get('id');
@@ -116,36 +137,20 @@ export function createServer(store = new Store()) {
         return send(res, 200, { ok: true });
       }
 
-      if (route === 'GET /blog') {
-        const items = publishedPosts(store).map((p) => `<article class="card"><h2><a href="/blog/${escapeHtml(p.blog.slug)}">${escapeHtml(p.blog.title)}</a></h2><p>${escapeHtml(p.blog.metaDescription)}</p></article>`).join('');
-        return send(res, 200, page(`Blog | ${business.brand.name}`, `<h1>Trader Tax Insights</h1>${items || '<p>First articles coming soon.</p>'}`), 'text/html');
-      }
-      if (req.method === 'GET' && url.pathname.startsWith('/blog/')) {
-        const slug = decodeURIComponent(url.pathname.slice(6));
-        const pack = publishedPosts(store).find((p) => p.blog.slug === slug);
-        if (!pack) return send(res, 404, page('Not found', '<h1>Article not found</h1>'), 'text/html');
-        const schema = { '@context': 'https://schema.org', '@type': 'Article', headline: pack.blog.title, description: pack.blog.metaDescription,
-          datePublished: pack.blog.publishedAt, author: { '@type': 'Organization', name: business.brand.name }, keywords: pack.blog.keywords.join(', ') };
-        const cta = `<aside class="cta"><h3>Get ${escapeHtml(business.offers.leadMagnet.name)}</h3><p>${escapeHtml(business.offers.leadMagnet.description)}</p><a class="btn" href="/#quiz">Take the 60-second quiz</a></aside>`;
-        const html = `<article class="post">${markdownToHtml(pack.blog.markdown.replace(/^# .*\n+/, `# ${pack.blog.title}\n\n`))}</article>${cta}
-<script type="application/ld+json">${JSON.stringify(schema).replace(/</g, '\\u003c')}</script>`;
-        return send(res, 200, page(`${pack.blog.title} | ${business.brand.name}`, html, pack.blog.metaDescription), 'text/html');
-      }
-      if (route === 'GET /sitemap.xml') {
-        const base = business.brand.website;
-        const urls = ['/', '/playbook', '/blog', ...publishedPosts(store).map((p) => `/blog/${p.blog.slug}`)];
-        return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>${escapeHtml(base + u)}</loc></url>`).join('')}</urlset>`, 'application/xml');
-      }
-      if (route === 'GET /robots.txt') return send(res, 200, `User-agent: *\nDisallow: /admin\nDisallow: /api/\nSitemap: ${business.brand.website}/sitemap.xml\n`, 'text/plain');
-
-      // ---------------- booking webhook (Calendly / Cal.com / Zapier)
-      if (route === 'POST /api/webhooks/booking') {
-        if (!safeEqual(url.searchParams.get('secret'), process.env.BOOKING_WEBHOOK_SECRET)) return send(res, 401, { error: 'Unauthorized' });
+      // ---------------- conversion webhooks (Zapier / Make / Calendly / your intake form)
+      // POST /api/webhooks/intake?secret=...   {email}  -> intake_started (stops nurture)
+      // POST /api/webhooks/booking?secret=...  {email}  -> booked
+      const hook = url.pathname.match(/^\/api\/webhooks\/(intake|booking)$/);
+      if (req.method === 'POST' && hook) {
+        if (!safeEqual(url.searchParams.get('secret'), process.env.WEBHOOK_SECRET)) return send(res, 401, { error: 'Unauthorized' });
         const body = await readJson(req);
-        const email = String(body.email || body.payload?.email || body.payload?.invitee?.email || '').toLowerCase();
-        const lead = store.find('leads', (l) => l.email === email);
+        const email = String(body.email || body.payload?.email || body.payload?.invitee?.email || '').trim().toLowerCase();
+        let lead = store.find('leads', (l) => l.email === email);
+        if (!lead && hook[1] === 'intake' && email && body.consent) {
+          lead = captureLead(store, { email, firstName: body.firstName, consent: true, source: 'main-site-intake' }).lead;
+        }
         if (!lead) return send(res, 202, { ok: true, matched: false });
-        setLeadStatus(store, lead.id, 'booked');
+        setLeadStatus(store, lead.id, hook[1] === 'intake' ? 'intake_started' : 'booked');
         return send(res, 200, { ok: true, matched: true });
       }
 
@@ -158,10 +163,16 @@ export function createServer(store = new Store()) {
           const leads = [...store.all('leads')].sort((a, b) => b.score - a.score || new Date(b.createdAt) - new Date(a.createdAt));
           return send(res, 200, leads);
         }
+        if (route === 'GET /api/admin/leads.csv') {
+          const cols = ['createdAt', 'email', 'firstName', 'status', 'tier', 'score', 'segment', 'recommendedService', 'source', 'ref'];
+          const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+          const csv = [cols.join(','), ...store.all('leads').map((l) => cols.map((c) => q(l[c])).join(','))].join('\n');
+          return send(res, 200, csv, 'text/csv', { 'Content-Disposition': 'attachment; filename="tradertaxhq-leads.csv"' });
+        }
         const statusMatch = url.pathname.match(/^\/api\/admin\/leads\/([^/]+)\/status$/);
         if (req.method === 'POST' && statusMatch) {
           const { status } = await readJson(req);
-          if (!['new', 'contacted', 'booked', 'client', 'unsubscribed', 'lost'].includes(status)) return send(res, 400, { error: 'Invalid status' });
+          if (!LEAD_STATUSES.includes(status)) return send(res, 400, { error: 'Invalid status' });
           const lead = setLeadStatus(store, statusMatch[1], status);
           return lead ? send(res, 200, lead) : send(res, 404, { error: 'Lead not found' });
         }
@@ -169,6 +180,16 @@ export function createServer(store = new Store()) {
           const packs = [...store.all('contentPacks')].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 12);
           const posts = [...store.all('posts')].sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor));
           return send(res, 200, { packs, posts });
+        }
+        const articleMatch = url.pathname.match(/^\/api\/admin\/packs\/([^/]+)\/article\.md$/);
+        if (req.method === 'GET' && articleMatch) {
+          const pack = store.get('contentPacks', articleMatch[1]);
+          if (!pack) return send(res, 404, { error: 'Pack not found' });
+          const front = ['---', `title: ${JSON.stringify(pack.blog.title)}`, `slug: ${pack.blog.slug}`,
+            `description: ${JSON.stringify(pack.blog.metaDescription)}`, `quickAnswer: ${JSON.stringify(pack.blog.quickAnswer || '')}`,
+            `keywords: ${JSON.stringify(pack.blog.keywords)}`, '---', ''].join('\n');
+          return send(res, 200, front + pack.blog.markdown, 'text/markdown',
+            { 'Content-Disposition': `attachment; filename="${pack.blog.slug}.md"` });
         }
         if (route === 'GET /api/admin/emails') {
           return send(res, 200, [...store.all('emails')].sort((a, b) => new Date(b.sendAt) - new Date(a.sendAt)).slice(0, 200)
@@ -190,8 +211,7 @@ export function createServer(store = new Store()) {
           const { id, text } = await readJson(req);
           const post = store.get('posts', id);
           if (!post || !['pending_approval', 'scheduled'].includes(post.status)) return send(res, 404, { error: 'Post not editable' });
-          const { checkCompliance } = await import('./compliance.js');
-          return send(res, 200, store.update('posts', id, { text, compliance: checkCompliance(text), status: 'pending_approval' }));
+          return send(res, 200, store.update('posts', id, { text: String(text), compliance: checkCompliance(text), status: 'pending_approval' }));
         }
         return send(res, 404, { error: 'Not found' });
       }
@@ -219,6 +239,7 @@ export function startScheduler(store, intervalMs = 60_000) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   if (!process.env.ADMIN_TOKEN) console.warn('[warn] ADMIN_TOKEN is not set - the admin dashboard is locked.');
   if (!process.env.APP_SECRET) console.warn('[warn] APP_SECRET is not set - using an insecure default for unsubscribe links.');
+  if (!process.env.MAILING_ADDRESS) console.warn('[warn] MAILING_ADDRESS is not set - CAN-SPAM requires a postal address in marketing emails.');
   const store = new Store();
   const port = Number(process.env.PORT) || 3000;
   createServer(store).listen(port, () => console.log(`${business.brand.name} marketing system on http://localhost:${port}`));

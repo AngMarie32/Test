@@ -27,7 +27,11 @@ export function markdownToHtml(md) {
   const inline = (t) => escapeHtml(t)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2">$1</a>')
-    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2">$2</a>');
+    // Bare URLs: link the full (UTM-tagged) address, display a clean host + path.
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (m, pre, href) => {
+      const clean = href.replace(/&amp;/g, '&').replace(/^https?:\/\//, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+      return `${pre}<a href="${href}">${clean}</a>`;
+    });
   return String(md).trim().split(/\n{2,}/).map((block) => {
     const lines = block.split('\n');
     if (/^#{1,3}\s/.test(block)) {
@@ -40,27 +44,45 @@ export function markdownToHtml(md) {
   }).join('\n');
 }
 
-export function personalize(text, lead) {
-  return String(text)
-    .replaceAll('{{first_name}}', lead.firstName || 'there')
-    .replaceAll('{{booking_url}}', business.brand.bookingUrl)
-    .replaceAll('{{site_url}}', business.brand.website);
+// Appends UTM tags to links that point at the main site so email traffic is
+// attributable in its analytics.
+export function tagUrl(url, { medium = 'email', campaign = 'nurture' } = {}) {
+  if (!url.startsWith(business.brand.mainSite)) return url;
+  const u = new URL(url);
+  u.searchParams.set('utm_source', 'tthq-marketing');
+  u.searchParams.set('utm_medium', medium);
+  u.searchParams.set('utm_campaign', campaign);
+  return u.toString();
 }
 
-export function renderEmail({ subject, body, preheader = '' }, lead) {
+export function personalize(text, lead, campaign = 'nurture') {
+  const b = business.brand;
+  return String(text)
+    .replaceAll('{{first_name}}', lead.firstName || 'there')
+    .replaceAll('{{intake_url}}', tagUrl(b.intakeUrl, { campaign }))
+    .replaceAll('{{pricing_url}}', tagUrl(b.pricingUrl, { campaign }))
+    .replaceAll('{{prop_url}}', tagUrl(b.propFirmUrl, { campaign }))
+    .replaceAll('{{checklist_url}}', `${b.website}${business.offers.leadMagnet.path}`)
+    .replaceAll('{{site_url}}', tagUrl(b.mainSite, { campaign }));
+}
+
+export function renderEmail({ subject, body, preheader = '', kind = 'nurture' }, lead) {
   const unsubUrl = `${business.brand.website}/unsubscribe?id=${lead.id}&t=${unsubscribeToken(lead.id)}`;
-  const text = `${personalize(body, lead)}\n\n--\n${business.brand.mailingAddress}\nUnsubscribe: ${unsubUrl}`;
-  const html = `<!doctype html><html><body style="margin:0;background:#f4f5f7;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1d2330">
+  const content = personalize(body, lead, kind);
+  const text = `${content}\n\n--\n${business.brand.mailingAddress}\nUnsubscribe: ${unsubUrl}`;
+  const html = `<!doctype html><html><body style="margin:0;background:#0b111e;font-family:Inter,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b111e">
 <span style="display:none;max-height:0;overflow:hidden">${escapeHtml(preheader)}</span>
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
-<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border-radius:8px">
-<tr><td style="padding:20px 28px;border-bottom:3px solid #0f9d58;font-weight:700;font-size:18px">${escapeHtml(business.brand.name)}</td></tr>
-<tr><td style="padding:24px 28px;font-size:16px;line-height:1.55">${markdownToHtml(personalize(body, lead))}</td></tr>
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:10px">
+<tr><td style="padding:18px 28px;background:#0b111e;border-radius:10px 10px 0 0;font-weight:800;font-size:20px;color:#f8fafc">Trader<span style="color:#21c45d">Tax</span>HQ</td></tr>
+<tr><td style="padding:24px 28px;font-size:16px;line-height:1.6">${markdownToHtml(content).replaceAll('<a ', '<a style="color:#16a34a;font-weight:600" ')}</td></tr>
+${kind === 'owner' ? '' : `<tr><td style="padding:0 28px 24px"><a href="${escapeHtml(tagUrl(business.brand.intakeUrl, { campaign: kind }))}" style="display:inline-block;background:#21c45d;color:#0b111e;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:8px">Start Basic Intake</a></td></tr>`}
 <tr><td style="padding:16px 28px;font-size:12px;color:#6b7280;border-top:1px solid #eee">
+${escapeHtml(business.compliance.disclaimer)}<br><br>
 ${escapeHtml(business.brand.mailingAddress)}<br>
-You are receiving this because you requested ${escapeHtml(business.offers.leadMagnet.name)}. <a href="${unsubUrl}" style="color:#6b7280">Unsubscribe</a>
+You are receiving this because you joined the TraderTaxHQ email list. <a href="${unsubUrl}" style="color:#6b7280">Unsubscribe</a>
 </td></tr></table></td></tr></table></body></html>`;
-  return { subject: personalize(subject, lead), html, text, unsubUrl };
+  return { subject: personalize(subject, lead, kind), html, text, unsubUrl };
 }
 
 async function postJson(url, headers, payload) {
@@ -89,7 +111,6 @@ export async function deliver({ to, subject, html, text, unsubUrl }) {
         Headers: Object.entries(listHeaders).map(([Name, Value]) => ({ Name, Value })) });
     return { provider, providerId: r.MessageID };
   }
-
   if (provider === 'noop') return { provider, providerId: null }; // tests
 
   const dir = path.join(ROOT, 'data', 'outbox');

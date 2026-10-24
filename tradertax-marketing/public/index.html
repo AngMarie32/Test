@@ -3,83 +3,85 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TraderTax HQ | Tax Strategy Built for Active Traders</title>
-<meta name="description" content="Trader Tax Status, Section 475 mark-to-market, futures 60/40, prop firm payouts and wash sale cleanup. Take the 60-second trader tax quiz.">
+<meta name="robots" content="noindex">
+<title>Prop Firm Tax Check | TraderTaxHQ</title>
+<meta name="description" content="A 60-second tax check for prop firm, funded account, futures and active traders. Get the 2026 Prop Firm Trader Tax Checklist and see which TraderTaxHQ plan fits.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
 <header class="top">
-  <a href="/" class="logo">TraderTax HQ</a>
-  <nav><a href="/blog">Blog</a><a href="/playbook">Free Playbook</a><a class="btn small" href="#quiz">Take the quiz</a></nav>
+  <a href="https://www.tradertaxhq.com" class="logo">Trader<span>Tax</span>HQ</a>
+  <nav><a href="https://www.tradertaxhq.com/prop-firm-taxes">Prop Firm Taxes</a><a href="https://www.tradertaxhq.com/pricing">Pricing</a><a class="btn small" href="#quiz">Take the tax check</a></nav>
 </header>
 <main class="wrap">
   <section class="hero">
-    <h1>Your broker sends a 1099.<br>Your tax strategy shouldn't stop there.</h1>
-    <p>TraderTax HQ works only with active traders - futures, options, day traders, crypto and funded prop traders. Find out in 60 seconds whether you may be leaving money on the table.</p>
-    <a class="btn" href="#quiz">Take the 60-second trader tax quiz</a>
+    <span class="eyebrow">Built for funded &amp; prop firm traders</span>
+    <h1>Got paid by a prop firm?<br><em>Here's how it's actually taxed.</em></h1>
+    <p>Topstep, Apex, TradeDay, FundingTicks, FTMO: payouts are usually contractor income with self-employment tax, not 60/40 futures gains. Take the 60-second tax check and see what applies to you.</p>
+    <div class="pills"><span>Prop Payouts</span><span>1099-NEC</span><span>Section 1256</span><span>Wash Sales</span><span>TTS</span><span>§475</span><span>Entities</span><span>Evenings &amp; Weekends</span></div>
+    <a class="btn" href="#quiz">Take the 60-second tax check</a>
   </section>
 
   <section class="grid">
-    <div class="card"><h3>Trader Tax Status</h3><p>Trade like a business? You may be able to deduct data, platforms and education as business expenses.</p></div>
-    <div class="card"><h3>Section 475 MTM</h3><p>The right election can remove the $3,000 loss cap and wash sales - but the deadline is strict.</p></div>
-    <div class="card"><h3>Futures 60/40</h3><p>Section 1256 contracts get blended long-term rates, even on scalps. Make sure your return shows it.</p></div>
-    <div class="card"><h3>Prop Firm Payouts</h3><p>Funded-trader payouts are usually self-employment income. Plan estimates and deductions before April.</p></div>
+    <div class="card"><h3>1099-NEC, 1099-K, or nothing</h3><p>Reconcile every form to the payouts you actually received. Avoid double counting, and report foreign firms even when no form arrives.</p></div>
+    <div class="card"><h3>Evals &amp; resets</h3><p>They may be current business expenses or startup costs depending on timing. Not every fee is automatically deductible.</p></div>
+    <div class="card"><h3>Self-employment tax</h3><p>Prop firms withhold nothing. Quarterly estimates keep April from turning into a penalty.</p></div>
+    <div class="card"><h3>Your own futures account</h3><p>Section 1256 contracts you trade with your own capital get 60/40 treatment. Your payouts usually don't.</p></div>
   </section>
 
   <form class="quiz" id="quiz" autocomplete="on">
-    <h2>Trader Tax Quiz</h2>
-    <p style="color:var(--muted)">Answer what you can - estimates are fine. You'll get <strong>The Active Trader Tax Playbook</strong> immediately.</p>
+    <h2>Prop Firm Tax Check</h2>
+    <p style="color:var(--muted)">Estimates are fine. You'll get <strong>The 2026 Prop Firm Trader Tax Checklist &amp; Expense Deduction Guide</strong> right away, plus subscriber-only discounts.</p>
 
     <div class="field">
-      <label>What do you trade? <small>(select all)</small></label>
+      <label>How do you trade? <small>(select all)</small></label>
       <div class="chips">
-        <label><input type="checkbox" name="instruments" value="futures"> Futures</label>
-        <label><input type="checkbox" name="instruments" value="options"> Options</label>
-        <label><input type="checkbox" name="instruments" value="equities"> Stocks / ETFs</label>
-        <label><input type="checkbox" name="instruments" value="crypto"> Crypto</label>
         <label><input type="checkbox" name="instruments" value="prop"> Prop firm / funded account</label>
+        <label><input type="checkbox" name="instruments" value="futures"> Futures (own account)</label>
+        <label><input type="checkbox" name="instruments" value="forex"> Forex</label>
+        <label><input type="checkbox" name="instruments" value="options"> Stocks / options</label>
+        <label><input type="checkbox" name="instruments" value="crypto"> Crypto</label>
+      </div>
+    </div>
+
+    <div class="prop-only" id="propFields" hidden>
+      <div class="row">
+        <div class="field"><label for="propFirms">How many prop firms paid you this year?</label>
+          <select id="propFirms" name="propFirms"><option value="0">None yet (still in evals)</option><option value="1">1</option><option value="2">2-3</option><option value="4">4+</option></select></div>
+        <div class="field"><label for="propPayouts">Total payouts this year</label>
+          <select id="propPayouts" name="propPayouts"><option value="0">$0</option><option value="5000">Under $10k</option><option value="25000">$10k - $50k</option><option value="75000">$50k - $100k</option><option value="150000">$100k+</option></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="foreignFirm">Any payouts from a firm that sends no US tax form (e.g. FTMO)?</label>
+          <select id="foreignFirm" name="foreignFirm"><option value="no">No / not sure</option><option value="yes">Yes</option></select></div>
+        <div class="field"><label for="madeEstimates">Have you made quarterly estimated payments?</label>
+          <select id="madeEstimates" name="madeEstimates"><option value="no">No</option><option value="yes">Yes</option></select></div>
       </div>
     </div>
 
     <div class="row">
-      <div class="field"><label for="tradesPerYear">Trades per year <small>(round trips)</small></label>
-        <select id="tradesPerYear" name="tradesPerYear">
-          <option value="50">Under 100</option><option value="300">100 - 500</option><option value="700">500 - 1,000</option>
-          <option value="2000">1,000 - 5,000</option><option value="8000">5,000+</option>
-        </select></div>
+      <div class="field"><label for="brokerAccounts">Personal broker accounts <small>(not prop)</small></label>
+        <select id="brokerAccounts" name="brokerAccounts"><option value="0">None</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">4-5</option><option value="6">6+</option></select></div>
+      <div class="field"><label for="tradesPerYear">Trades per year in those accounts</label>
+        <select id="tradesPerYear" name="tradesPerYear"><option value="0">None / under 100</option><option value="300">100 - 500</option><option value="650">500 - 750</option><option value="2000">750 - 5,000</option><option value="8000">5,000+</option></select></div>
+    </div>
+    <div class="row">
       <div class="field"><label for="daysTradedPct">How often do you trade?</label>
-        <select id="daysTradedPct" name="daysTradedPct">
-          <option value="20">A few days a month</option><option value="50">About half of market days</option>
-          <option value="80">Most market days</option><option value="95">Virtually every market day</option>
-        </select></div>
+        <select id="daysTradedPct" name="daysTradedPct"><option value="20">A few days a month</option><option value="50">About half of market days</option><option value="80">Most market days</option><option value="95">Virtually every market day</option></select></div>
+      <div class="field"><label for="netResult">Last year's personal trading result</label>
+        <select id="netResult" name="netResult"><option value="0">About break-even / n/a</option><option value="-25000">Loss over $10k</option><option value="-3000">Small loss</option><option value="30000">Profit under $100k</option><option value="150000">Profit $100k+</option></select></div>
     </div>
     <div class="row">
-      <div class="field"><label for="avgHoldDays">Typical holding period</label>
-        <select id="avgHoldDays" name="avgHoldDays">
-          <option value="0">Intraday</option><option value="5">A few days</option><option value="20">A few weeks</option><option value="90">Months or longer</option>
-        </select></div>
-      <div class="field"><label for="hoursPerWeek">Hours per week on trading</label>
-        <select id="hoursPerWeek" name="hoursPerWeek">
-          <option value="5">Under 10</option><option value="15">10 - 20</option><option value="30">20 - 40</option><option value="45">40+</option>
-        </select></div>
-    </div>
-    <div class="row">
-      <div class="field"><label for="accountSize">Total trading capital</label>
-        <select id="accountSize" name="accountSize">
-          <option value="10000">Under $25k</option><option value="50000">$25k - $100k</option><option value="250000">$100k - $500k</option><option value="750000">$500k+</option>
-        </select></div>
-      <div class="field"><label for="netResult">Last year's net trading result</label>
-        <select id="netResult" name="netResult">
-          <option value="-50000">Loss over $25k</option><option value="-15000">Loss $10k - $25k</option><option value="-3000">Small loss</option>
-          <option value="0">About break-even</option><option value="30000">Profit under $100k</option><option value="150000">Profit $100k+</option>
-        </select></div>
-    </div>
-    <div class="row">
-      <div class="field"><label for="hasCpa">Do you have a tax pro who knows trader tax?</label>
-        <select id="hasCpa" name="hasCpa"><option value="no">No</option><option value="yes">Yes</option></select></div>
       <div class="field"><label for="hasEntity">Do you trade through an LLC / S-Corp?</label>
         <select id="hasEntity" name="hasEntity"><option value="no">No</option><option value="yes">Yes</option></select></div>
+      <div class="field"><label for="irsNotice">Have you received an IRS notice about trading income?</label>
+        <select id="irsNotice" name="irsNotice"><option value="no">No</option><option value="yes">Yes</option></select></div>
     </div>
+    <div class="field"><label for="hasPreparer">Do you have a tax preparer who understands trader taxes?</label>
+      <select id="hasPreparer" name="hasPreparer"><option value="no">No</option><option value="yes">Yes</option></select></div>
+
     <div class="row">
       <div class="field"><label for="firstName">First name</label><input id="firstName" name="firstName" type="text" autocomplete="given-name"></div>
       <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email"></div>
@@ -87,48 +89,62 @@
     <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
     <div class="field consent">
       <input type="checkbox" id="consent" name="consent" required>
-      <label for="consent" style="font-weight:400">Send me the playbook and occasional trader tax emails. Unsubscribe anytime.</label>
+      <label for="consent" style="font-weight:400">Send me the checklist, subscriber-only discounts, specials, tax deadline reminders, and educational emails. Unsubscribe anytime.</label>
     </div>
-    <button class="btn" type="submit">Get my results + playbook</button>
+    <button class="btn" type="submit">Get my results + checklist</button>
     <p id="error" style="color:var(--bad)"></p>
   </form>
 
   <section class="card result" id="result" style="margin-top:20px"></section>
 </main>
 <footer class="foot">
-  <p>This content is for educational purposes only and is not tax, legal or investment advice. Tax outcomes depend on your specific facts and circumstances. Consult a qualified tax professional before acting.</p>
+  <p>This content is for educational purposes only and is not tax, legal or investment advice. Tax outcomes depend on your specific facts and circumstances. TraderTaxHQ is run by a tax advisor (not a CPA or EA).</p>
+  <p>© TraderTaxHQ · <a href="https://www.tradertaxhq.com/privacy">Privacy</a> · <a href="https://www.tradertaxhq.com/terms">Terms</a></p>
 </footer>
 <script>
+const PLANS = {
+  starter: ['Starter', '$297/yr', 'Unlimited prop firm accounts, up to 2 broker accounts.'],
+  essential: ['Essential', '$497/yr', 'Unlimited prop firm accounts, up to 3 broker accounts, Form 8949 trade reporting.'],
+  professional: ['Professional', '$997/yr', 'Unlimited trades, up to 5 brokers, Trader Tax Status analysis and MTM election guidance.'],
+  enterprise: ['Enterprise', 'from $2,497/yr', 'Entity return plus your personal 1040 and year-round planning.'],
+};
 const form = document.getElementById('quiz');
+const propFields = document.getElementById('propFields');
+form.addEventListener('change', () => { propFields.hidden = !form.querySelector('input[value=prop]').checked; });
+
 const params = new URLSearchParams(location.search);
 const utm = Object.fromEntries(['source', 'medium', 'campaign', 'content'].map((k) => [k, params.get('utm_' + k)]).filter(([, v]) => v));
+const ref = params.get('ref') || params.get('aff') || '';
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(form);
-  const answers = {
-    instruments: fd.getAll('instruments'),
-    tradesPerYear: fd.get('tradesPerYear'), daysTradedPct: fd.get('daysTradedPct'), avgHoldDays: fd.get('avgHoldDays'),
-    hoursPerWeek: fd.get('hoursPerWeek'), accountSize: fd.get('accountSize'), netResult: fd.get('netResult'),
-    hasCpa: fd.get('hasCpa'), hasEntity: fd.get('hasEntity'),
-  };
+  const answers = Object.fromEntries(['propFirms', 'propPayouts', 'foreignFirm', 'madeEstimates', 'brokerAccounts', 'tradesPerYear',
+    'daysTradedPct', 'netResult', 'hasEntity', 'irsNotice', 'hasPreparer'].map((k) => [k, fd.get(k)]));
+  answers.instruments = fd.getAll('instruments');
   const btn = form.querySelector('button');
   btn.disabled = true;
   document.getElementById('error').textContent = '';
   try {
     const res = await fetch('/api/leads', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: fd.get('email'), firstName: fd.get('firstName'), consent: fd.get('consent') === 'on', website: fd.get('website'), answers, utm, source: 'website-quiz' }),
+      body: JSON.stringify({ email: fd.get('email'), firstName: fd.get('firstName'), consent: fd.get('consent') === 'on', website: fd.get('website'), answers, utm, ref, source: 'tax-check-quiz' }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Something went wrong');
-    const out = document.getElementById('result');
-    const msg = data.tier === 'hot'
-      ? '<h2>You look like a strong candidate for trader-specific planning.</h2><p>Based on your answers, there may be meaningful opportunities worth a closer look. Book a free 20-minute strategy call and we will walk through your numbers.</p>'
+    const plan = PLANS[data.plan] || PLANS.starter;
+    const intake = new URL(data.intakeUrl);
+    intake.searchParams.set('utm_source', 'tax-check'); intake.searchParams.set('utm_medium', 'quiz');
+    const head = data.tier === 'hot'
+      ? '<h2>There is likely real work to do on your return.</h2><p>Based on your answers, you are exactly who we built TraderTaxHQ for.</p>'
       : data.tier === 'warm'
-        ? '<h2>There are likely a few things worth checking.</h2><p>Start with the playbook, and if you want a second set of eyes, grab a free strategy call.</p>'
-        : '<h2>Your playbook is on its way.</h2><p>It covers the trader tax rules worth knowing as your trading grows.</p>';
-    out.innerHTML = msg + '<p><a class="btn" href="' + data.bookingUrl + '">Book my free strategy call</a> <a class="btn ghost" href="' + data.playbookUrl + '">Open the playbook</a></p>';
+        ? '<h2>A few things are worth checking.</h2><p>Start with the checklist. When you are ready, the intake takes 3-5 minutes.</p>'
+        : '<h2>Your checklist is on its way.</h2><p>It covers the forms, expenses and dates to track as your trading grows.</p>';
+    const out = document.getElementById('result');
+    out.innerHTML = head
+      + '<p><strong>Likely fit: ' + plan[0] + ' (' + plan[1] + ')</strong> - ' + plan[2] + '</p>'
+      + '<p><a class="btn" href="' + intake + '">Start Basic Intake</a> <a class="btn ghost" href="' + data.checklistUrl + '">Open the checklist</a></p>'
+      + '<p style="color:var(--muted);font-size:14px">No tax documents needed yet. Email-only guidance available.</p>';
     out.classList.add('show');
     form.style.display = 'none';
     out.scrollIntoView({ behavior: 'smooth' });

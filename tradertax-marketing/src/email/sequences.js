@@ -1,153 +1,162 @@
-// Nurture sequences. Every new lead gets the core sequence with segment-specific
-// emails slotted in; hot leads also get a same-day personal note. A sequence
-// stops automatically when the lead books, becomes a client or unsubscribes.
+// Nurture sequences. Every new lead gets the core sequence with a
+// segment-specific email slotted in; hot leads also get a same-day personal
+// note. A sequence stops automatically when the lead starts intake, books,
+// becomes a client or unsubscribes.
+//
+// Placeholders filled at send time: {{first_name}} {{intake_url}}
+// {{pricing_url}} {{checklist_url}} {{prop_url}}
 import business from '../../config/business.js';
 
-const svc = (id) => business.offers.services.find((s) => s.id === id)?.name || 'a strategy review';
+const plan = (id) => business.offers.services.find((s) => s.id === id);
 
 const segmentEmails = {
+  prop: {
+    subject: 'Your prop payout is not a trading gain',
+    body: `Hi {{first_name}},
+
+This is the rule that catches most funded traders:
+
+**Start with the payout arrangement, not the instrument.** You may trade ES and NQ all day, but a payout from a prop firm is usually not your own Section 1256 futures gain. For a typical independent-contractor arrangement it is business income on Schedule C, with self-employment tax on Schedule SE.
+
+What that usually means in practice:
+
+- Payouts are often reported on a 1099-NEC, sometimes a 1099-MISC or 1099-K, and foreign firms may send no US form at all. The income is still reportable.
+- Watch for double counting when a payment processor also issues a 1099-K for the same payout.
+- Evaluation and reset fees may be current business expenses or startup costs depending on timing. Not every fee is automatically deductible.
+- Prop firms withhold nothing, so quarterly estimates usually matter.
+
+We handle unlimited prop firm accounts on every plan. Start with a quick intake (3-5 minutes, no documents needed yet): {{intake_url}}`,
+  },
   futures: {
     subject: 'The 60/40 math most futures traders never run',
     body: `Hi {{first_name}},
 
-Futures and other Section 1256 contracts are taxed 60% long-term and 40% short-term no matter how long you held them - even a 30-second scalp.
+Regulated futures traded in **your own account** are Section 1256 contracts: 60% long-term and 40% short-term no matter how long you held them, even a 30-second scalp.
 
-**Illustrative example:** a $100,000 net futures gain for a trader in the top bracket blends to a top federal rate of roughly 26.8%, versus 37% if the same gain came from short-term stock trades. That gap could be worth about $10,000 on paper, before state tax and depending on your bracket.
+**Illustrative example:** for a trader in the top bracket, a $100,000 net futures gain blends to a top federal rate of about 26.8%, versus 37% if the same gain came from short-term stock trades. Your bracket, the 3.8% net investment income tax and state tax all change the real number.
 
 Two more things futures traders often miss:
 
 - Open positions are marked to market at year-end, so unrealized P&L on Dec 31 counts this year.
-- A net 1256 loss can be carried back up to three years against prior 1256 gains - an election most traders never make.
+- A net 1256 loss can be carried back up to three years against prior 1256 gains, using an election on Form 6781.
 
-Want us to check your Form 6781 setup? {{booking_url}}`,
+One important exception: payouts from a **prop firm** funded account usually do not get 60/40 treatment. Those are generally contractor income.
+
+Want us to look at your setup? {{intake_url}}`,
   },
-  options: {
-    subject: 'SPX vs SPY: same trade, different tax bill',
+  forex: {
+    subject: 'Forex taxes: the election you have to make first',
     body: `Hi {{first_name}},
 
-SPX options are broad-based index options, so they are generally Section 1256 contracts: 60/40 treatment and year-end mark-to-market. SPY options are options on an ETF, so gains are usually short-term and fully exposed to the wash sale rule.
+Spot forex gains and losses are generally **ordinary** under Section 988, not capital. That cuts both ways: losses are not capped at $3,000, but gains do not get capital gain rates.
 
-Same market exposure. Potentially very different tax result.
+For certain contracts, traders can make an internal election to opt out of Section 988. The catch is that the election generally has to be made and documented **before** the trade. You cannot pick the better treatment at tax time.
 
-Other options traps we fix every season:
+Add offshore broker statements in a different currency, and forex returns get messy fast.
 
-- Wash sales triggered by "substantially identical" options across strikes and expirations
-- Assignment and exercise adjustments missing from cost basis
-- Brokers reporting 1256 and non-1256 activity in ways that do not tie out
-
-If you trade options actively, let's look at your mix: {{booking_url}}`,
+We handle forex and multi-broker reporting. Start here: {{intake_url}}`,
   },
-  equities: {
+  options: {
     subject: 'The $3,000 loss cap may not have to apply to you',
     body: `Hi {{first_name}},
 
-Most traders assume two rules are permanent:
+Most stock and options traders assume two rules are permanent:
 
 1. You can only deduct $3,000 of net capital losses per year.
-2. Wash sales can disallow real losses.
+2. Wash sales can disallow real losses, across every account you own, including IRAs.
 
-Traders who qualify for Trader Tax Status and make a timely Section 475(f) mark-to-market election convert trading gains and losses to ordinary - which removes both the $3,000 cap and the wash sale rule on those securities.
+Traders who qualify for Trader Tax Status and make a timely Section 475(f) mark-to-market election treat those trading gains and losses as ordinary. That removes both the $3,000 cap and the wash sale rule for those securities.
 
-The catch: the election has a strict deadline (generally the original due date of the prior year's return - April 15 for most individuals), and you have to actually qualify.
+The catch: for existing filers the election is generally due with the prior-year return or extension by April 15, and you have to actually qualify. TTS is a facts-and-circumstances test.
 
-Not sure if you do? That's exactly what our free call is for: {{booking_url}}`,
-  },
-  prop: {
-    subject: 'Your prop firm payout is not a trading gain',
-    body: `Hi {{first_name}},
+Our Professional plan includes TTS analysis and MTM election guidance: {{pricing_url}}
 
-When a prop firm pays you, you usually are not trading your own capital - you are being paid for a service. That is why most funded traders receive a 1099-NEC or 1099-MISC, not a 1099-B.
-
-What that typically means:
-
-- The income is self-employment income on Schedule C
-- Self-employment tax (about 15.3% on the first tier of earnings) applies on top of income tax
-- Evaluation fees, resets, data and platform costs are generally deductible business expenses
-- You likely need quarterly estimated payments
-
-Funded traders who plan for this keep more of every payout. Let's set yours up: {{booking_url}}`,
+Not sure where you fit? Start with the intake: {{intake_url}}`,
   },
   crypto: {
     subject: '1099-DA changed crypto taxes - here is what to check',
     body: `Hi {{first_name}},
 
-Brokers and exchanges now report digital asset sales to the IRS on Form 1099-DA. If the cost basis on that form does not match your return, expect a mismatch notice.
+Brokers and exchanges now report digital asset sales on Form 1099-DA. If the cost basis on that form does not match your return, expect a mismatch notice.
 
 The usual problems:
 
 - Coins moved between wallets and exchanges lose their basis history
-- Staking and reward income reported as ordinary income at receipt, then again at sale
-- Missing records from exchanges that no longer exist
+- Staking and reward income is taxed when you receive it, then the basis has to carry through to the sale
+- Records are missing from exchanges that no longer exist
 
-We reconcile this before you file, not after the IRS letter arrives: {{booking_url}}`,
+Complex crypto and DeFi reporting is available on our Enterprise plan or as a custom quote. Start here: {{intake_url}}`,
   },
 };
 
 export function buildSequence(lead) {
-  const playbookUrl = `${business.brand.website}${business.offers.leadMagnet.path}`;
+  const fit = plan(lead.recommendedService) || plan('starter');
   const steps = [
     {
       key: 'welcome', delayDays: 0,
-      subject: `Your copy of ${business.offers.leadMagnet.name}`,
+      subject: 'Your 2026 Prop Firm Trader Tax Checklist',
+      preheader: 'Forms to expect, expenses to track, records to keep, and estimated tax dates.',
       body: `Hi {{first_name}},
 
-Thanks for taking the trader tax quiz. Here is your playbook: ${playbookUrl}
+Here is your copy of **${business.offers.leadMagnet.name}**: {{checklist_url}}
 
-Inside: the Trader Tax Status checklist, a Section 475 MTM walkthrough, the 60/40 futures math and a year-end wash-sale audit.
+Inside: the forms to expect from prop firms and brokers, the expenses to track, the records to keep, and the 2026 estimated tax dates.
 
-Over the next two weeks I will send a few short emails specific to how you trade. No fluff - just the rules that move the number on your return.
+You are also on the subscriber list, which means **subscriber-only discounts and early access to specials** before tax season.
 
-- The ${business.brand.name} team`,
+Over the next two weeks I will send a few short emails about how your kind of trading is taxed. When you are ready, the Basic Intake takes 3-5 minutes and needs no documents: {{intake_url}}
+
+- TraderTaxHQ`,
     },
   ];
 
   if (lead.tier === 'hot') {
     steps.push({
       key: 'hot-personal', delayDays: 0, delayHours: 1,
-      subject: 'Quick note on your quiz results',
+      subject: 'Quick note on your answers',
       body: `Hi {{first_name}},
 
-I looked at your quiz answers. Based on your activity level, there may be meaningful planning available - specifically around **${svc(lead.recommendedService)}**.
+I looked at your answers. Based on what you shared, our **${fit.name.split(' (')[0]}** plan (${fit.price}) looks like the likely fit: ${fit.fit}
+${lead.upsells?.includes('irs-notice') ? '\nYou mentioned an IRS notice. Do not wait on that one. Notices have response deadlines, and we can review it with you and guide your response.\n' : ''}
+Every situation is different, so the next step is the Basic Intake. It takes 3-5 minutes and needs no documents. We review it and recommend the right next step, often by email: {{intake_url}}
 
-Every situation is different, so I would rather look at your actual numbers than guess. Grab any open slot here and we will walk through it in 20 minutes: {{booking_url}}
+Prefer email-only guidance? Just reply to this email.
 
-- ${business.brand.name}`,
+- TraderTaxHQ`,
     });
   }
 
-  const seg = segmentEmails[lead.segment] || segmentEmails.equities;
+  const seg = segmentEmails[lead.segment] || segmentEmails.prop;
   steps.push({ key: `segment-${lead.segment}`, delayDays: 2, ...seg });
 
   steps.push(
     {
-      key: 'tts-check', delayDays: 5,
-      subject: 'Do you trade like a business? A 60-second self-check',
+      key: 'estimates', delayDays: 5,
+      subject: 'Nobody is withholding tax from your trading',
       body: `Hi {{first_name}},
 
-There is no bright-line test for Trader Tax Status, but courts have consistently looked at the same things:
+Prop firms withhold nothing, and neither does your futures or brokerage account. If you expect to owe $1,000 or more, the IRS expects quarterly estimated payments:
 
-- **Volume:** hundreds of trades a year (cases often discuss roughly 700+)
-- **Frequency:** trading on most available market days
-- **Holding period:** short - typically days or weeks, not months
-- **Time:** you spend a large part of your working day on it
-- **Intent:** you seek profit from short-term swings, not dividends or long-term appreciation
+- **April 15, June 15, September 15, and January 15** (dates shift when they fall on a weekend or holiday)
+- To avoid the penalty, generally pay at least 90% of this year's tax or 100% of last year's tax (110% if last year's AGI was over $150,000)
+- If your payouts came late in the year, the annualized income method can lower your earlier installments
 
-Hit most of those? TTS can unlock business expense deductions and, with a timely election, mark-to-market treatment.
+A filing extension extends the time to file, not the time to pay.
 
-Want a second opinion on your numbers? {{booking_url}}`,
+Want a quarterly number you can actually plan around? {{intake_url}}`,
     },
     {
       key: 'mistakes', delayDays: 9,
       subject: '5 trader tax mistakes we fix every season',
       body: `Hi {{first_name}},
 
-1. Filing straight from the broker 1099-B without reconciling wash sales across accounts
-2. Missing the Section 475(f) election deadline - then wishing you had it in a loss year
-3. Paying estimates on last year's income when this year's P&L is completely different
-4. Deducting trading expenses without qualifying for TTS (or not deducting them when you do)
-5. Treating prop firm payouts like capital gains
+1. Reporting prop firm payouts as 60/40 futures gains instead of contractor income
+2. Double counting a payout reported on both a 1099-NEC and a payment processor's 1099-K
+3. Skipping income from a foreign prop firm because no form arrived
+4. Deducting every eval and reset fee automatically, or none of them
+5. Filing straight from a broker 1099-B without reconciling wash sales across accounts
 
-Each of these is fixable - most of them before you file. {{booking_url}}`,
+Every return we prepare comes with audit-ready documentation for the positions taken. See plans from $297/yr: {{pricing_url}}`,
     },
     {
       key: 'last-call', delayDays: 14,
@@ -156,11 +165,11 @@ Each of these is fixable - most of them before you file. {{booking_url}}`,
 
 I have sent a few trader tax emails and do not want to clutter your inbox.
 
-If you would like us to look at your situation, the calendar is here: {{booking_url}}
+If you want us to handle this season, the Basic Intake is here: {{intake_url}}. We are available evenings and weekends.
 
-Otherwise you will get our weekly newsletter (one trader tax idea, every Thursday) and a heads-up before key deadlines. You can unsubscribe anytime below.
+Otherwise you will keep getting the weekly trader tax email, deadline reminders, and subscriber-only discounts. You can unsubscribe anytime below.
 
-- The ${business.brand.name} team`,
+- TraderTaxHQ`,
     },
   );
 
