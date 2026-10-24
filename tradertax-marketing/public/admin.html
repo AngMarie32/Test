@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Marketing Dashboard | TraderTax HQ</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .wrap { max-width: 1200px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kpi .v { font-size: 28px; font-weight: 800; }
+  .kpi .l { color: var(--muted); font-size: 13px; }
+  section { margin-top: 28px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  .item { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .item pre { white-space: pre-wrap; font: inherit; margin: 8px 0; color: var(--text); max-height: 260px; overflow: auto; }
+  .issues { color: var(--warn); font-size: 13px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions button, .toolbar button { padding: 7px 12px; font-size: 14px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .toolbar select, .toolbar input { width: auto; flex: 1 1 220px; }
+  #login { max-width: 420px; margin: 60px auto; }
+</style>
+</head>
+<body>
+<header class="top"><a href="/" class="logo">TraderTax HQ</a><nav><span style="color:var(--muted)">Marketing dashboard</span><button class="btn small ghost" id="logout" hidden>Sign out</button></nav></header>
+<main class="wrap">
+  <form id="login" class="card">
+    <h2>Admin sign in</h2>
+    <div class="field"><label for="token">Admin token</label><input id="token" type="password" autocomplete="current-password"></div>
+    <button class="btn">Sign in</button><p id="loginErr" style="color:var(--bad)"></p>
+  </form>
+
+  <div id="app" hidden>
+    <section><h2>Last 7 days</h2><div class="kpis" id="kpis"></div></section>
+
+    <section>
+      <h2>Content engine</h2>
+      <div class="toolbar">
+        <select id="topic"><option value="">Auto-pick in-season topic</option></select>
+        <input id="extra" type="text" placeholder="Optional extra context (e.g. new IRS guidance this week)">
+        <button class="btn" id="gen">Generate content pack</button>
+      </div>
+      <p id="genMsg" style="color:var(--muted)"></p>
+    </section>
+
+    <section><h2>Waiting for approval</h2><div id="queue"></div></section>
+    <section><h2>Scheduled &amp; published posts</h2><div class="scroll"><table id="posts"></table></div></section>
+    <section><h2>Leads</h2><div class="scroll"><table id="leads"></table></div></section>
+    <section><h2>Recent emails</h2><div class="scroll"><table id="emails"></table></div></section>
+  </div>
+</main>
+<script>
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (d) => d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+let token = '';
+try { token = localStorage.getItem('tthq-admin') || ''; } catch {}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, ...(opts.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { showLogin('Invalid token'); throw new Error('unauthorized'); }
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function showLogin(msg = '') {
+  document.getElementById('login').hidden = false;
+  document.getElementById('app').hidden = true;
+  document.getElementById('logout').hidden = true;
+  document.getElementById('loginErr').textContent = msg;
+}
+
+document.getElementById('login').addEventListener('submit', (e) => {
+  e.preventDefault();
+  token = document.getElementById('token').value.trim();
+  try { localStorage.setItem('tthq-admin', token); } catch {}
+  load();
+});
+document.getElementById('logout').addEventListener('click', () => {
+  token = '';
+  try { localStorage.removeItem('tthq-admin'); } catch {}
+  showLogin();
+});
+
+function compliance(c) {
+  return c && !c.ok ? `<div class="issues">⚠ ${c.issues.map(esc).join(' · ')}</div>` : '<span class="tag ok">compliance ok</span>';
+}
+
+async function act(kind, id, verb) {
+  await api('/api/admin/' + verb, { method: 'POST', body: JSON.stringify({ kind, id }) });
+  load();
+}
+
+async function load() {
+  try {
+    const [s, content, leads, emails, topics] = await Promise.all([
+      api('/api/admin/summary'), api('/api/admin/content'), api('/api/admin/leads'), api('/api/admin/emails'), api('/api/admin/topics'),
+    ]);
+    document.getElementById('login').hidden = true;
+    document.getElementById('app').hidden = false;
+    document.getElementById('logout').hidden = false;
+
+    const k = [['New leads', s.newLeads], ['Hot leads', s.hotLeads], ['Emails sent', s.emailsSent], ['Posts published', s.postsPublished],
+      ['Awaiting approval', s.pendingApproval], ['Total subscribed', s.totals.subscribed], ['Booked calls', s.totals.booked], ['Lead → booked', s.totals.bookingRate + '%']];
+    document.getElementById('kpis').innerHTML = k.map(([l, v]) => `<div class="card kpi"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('');
+
+    const sel = document.getElementById('topic');
+    if (sel.options.length === 1) sel.insertAdjacentHTML('beforeend', topics.map((t) => `<option value="${esc(t.id)}">${esc(t.title)}</option>`).join(''));
+
+    const q = [];
+    for (const p of content.packs) {
+      if (p.blog.status === 'pending_approval') q.push(`<div class="item"><span class="tag">blog</span> <strong>${esc(p.blog.title)}</strong> <span class="tag">${esc(p.source)}</span>
+        ${compliance(p.blog.compliance)}<pre>${esc(p.blog.markdown)}</pre>
+        <div class="actions"><button class="btn" onclick="act('blog','${p.id}','approve')">Approve &amp; publish</button><button class="btn ghost" onclick="act('blog','${p.id}','reject')">Reject</button></div></div>`);
+      if (p.newsletter.status === 'pending_approval') q.push(`<div class="item"><span class="tag">newsletter</span> <strong>${esc(p.newsletter.subject)}</strong> · sends ${esc(fmt(p.newsletter.scheduledFor))}
+        ${compliance(p.newsletter.compliance)}<pre>${esc(p.newsletter.body)}</pre>
+        <div class="actions"><button class="btn" onclick="act('newsletter','${p.id}','approve')">Approve</button><button class="btn ghost" onclick="act('newsletter','${p.id}','reject')">Reject</button></div></div>`);
+    }
+    for (const post of content.posts.filter((x) => x.status === 'pending_approval')) {
+      q.push(`<div class="item"><span class="tag">${esc(post.channel)}</span> · ${esc(fmt(post.scheduledFor))} ${compliance(post.compliance)}
+        <textarea rows="4" id="t-${post.id}">${esc(post.text)}</textarea>
+        <div class="actions" style="margin-top:8px"><button class="btn" onclick="act('post','${post.id}','approve')">Approve</button>
+        <button class="btn ghost" onclick="savePost('${post.id}')">Save edit</button><button class="btn ghost" onclick="act('post','${post.id}','reject')">Reject</button></div></div>`);
+    }
+    const latest = content.packs[0];
+    if (latest) q.push(`<details class="item"><summary>Video script for "${esc(latest.topicTitle)}"</summary><pre><strong>Hook:</strong> ${esc(latest.videoScript.hook)}\n\n${esc(latest.videoScript.script)}\n\n<strong>CTA:</strong> ${esc(latest.videoScript.cta)}</pre></details>`);
+    document.getElementById('queue').innerHTML = q.join('') || '<p style="color:var(--muted)">Nothing waiting. 🎉</p>';
+
+    document.getElementById('posts').innerHTML = '<tr><th>When</th><th>Channel</th><th>Status</th><th>Text</th></tr>' + content.posts
+      .filter((x) => x.status !== 'pending_approval').slice(-40).map((x) => `<tr><td>${esc(fmt(x.publishedAt || x.scheduledFor))}</td><td>${esc(x.channel)}</td><td>${esc(x.status)}</td><td>${esc(x.text.slice(0, 140))}</td></tr>`).join('');
+
+    const statuses = ['new', 'contacted', 'booked', 'client', 'lost', 'unsubscribed'];
+    document.getElementById('leads').innerHTML = '<tr><th>Score</th><th>Lead</th><th>Segment</th><th>Offer</th><th>Source</th><th>Added</th><th>Status</th></tr>' + leads.slice(0, 200).map((l) => `<tr>
+      <td><span class="tag ${l.tier === 'hot' ? 'hot' : l.tier === 'warm' ? 'warm' : ''}">${esc(l.score)} ${esc(l.tier)}</span></td>
+      <td>${esc(l.firstName)}<br><a href="mailto:${esc(l.email)}">${esc(l.email)}</a></td>
+      <td>${esc(l.segment)}${l.ttsLikely ? '<br><span class="tag ok">TTS likely</span>' : ''}</td><td>${esc(l.recommendedService)}</td>
+      <td>${esc(l.utm?.source || l.source)}</td><td>${esc(fmt(l.createdAt))}</td>
+      <td><select onchange="setStatus('${l.id}', this.value)">${statuses.map((st) => `<option ${st === l.status ? 'selected' : ''}>${st}</option>`).join('')}</select></td></tr>`).join('');
+
+    document.getElementById('emails').innerHTML = '<tr><th>Send at</th><th>Kind</th><th>To</th><th>Subject</th><th>Status</th></tr>' + emails.slice(0, 60).map((e) =>
+      `<tr><td>${esc(fmt(e.sendAt))}</td><td>${esc(e.kind)}</td><td>${esc(e.to)}</td><td>${esc(e.subject)}</td><td>${esc(e.status)}${e.error ? ' ⚠' : ''}</td></tr>`).join('');
+  } catch (err) {
+    if (err.message !== 'unauthorized') alert(err.message);
+  }
+}
+
+async function setStatus(id, status) {
+  await api(`/api/admin/leads/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+  load();
+}
+
+async function savePost(id) {
+  await api('/api/admin/posts/edit', { method: 'POST', body: JSON.stringify({ id, text: document.getElementById('t-' + id).value }) });
+  load();
+}
+
+document.getElementById('gen').addEventListener('click', async () => {
+  const btn = document.getElementById('gen');
+  const msg = document.getElementById('genMsg');
+  btn.disabled = true;
+  msg.textContent = 'Generating... this can take a minute with Claude.';
+  try {
+    const r = await api('/api/admin/generate', { method: 'POST', body: JSON.stringify({ topicId: document.getElementById('topic').value, extraContext: document.getElementById('extra').value }) });
+    msg.textContent = `Pack created (${r.source})${r.error ? ' - Claude error: ' + r.error : ''}. Review it below.`;
+    load();
+  } catch (err) { msg.textContent = err.message; } finally { btn.disabled = false; }
+});
+
+if (token) load(); else showLogin();
+</script>
+</body>
+</html>
