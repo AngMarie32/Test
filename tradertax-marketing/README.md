@@ -61,6 +61,14 @@ With no other keys set, nothing leaves the system. Emails are written to `data/o
 4. **Articles.** Approve an article in `/admin`, then use **Copy Markdown** or **Download .md** (with title, slug, description and quick-answer front matter) and publish it under `/resources`. This app serves no public blog, and it is `noindex`, so it never competes with the main site in search.
 5. **Affiliates.** Give partners `https://go.tradertaxhq.com/?ref=THEIRCODE`. Leads carry the code, and the weekly report counts referrals per affiliate.
 
+## Free hosting (no disk, $0)
+
+`render-free.yaml` (repo root) runs the app on Render's free plan. Free hosts sleep and have no disk, so:
+
+- **Leads and content live in a free [Neon](https://neon.tech) Postgres database.** Set `DATABASE_URL` to its connection string. The app creates its own table.
+- **A free timer wakes the app and runs the jobs.** In [cron-job.org](https://cron-job.org), create a job that calls `https://YOUR-APP.onrender.com/api/cron/tick?secret=CRON_SECRET` every 10 minutes. That runs everything that's due: emails, social posts, the newsletter, weekly content, deadline reminders and the Monday report. It also keeps the app awake, so visitors rarely hit a cold start.
+- Set `SCHEDULER=off` (the blueprint already does).
+
 ## Turning on each piece
 
 | Feature | Setting | Notes |

@@ -1,0 +1,32 @@
+# Render Blueprint (FREE): no disk. Leads are stored in a free Neon Postgres database
+# (DATABASE_URL) and a free external timer (cron-job.org) wakes the app and runs the
+# weekly jobs. Use via New -> Blueprint -> Blueprint Path: render-free.yaml
+services:
+  - type: web
+    name: tradertaxhq-marketing
+    runtime: node
+    plan: free
+    branch: ccr-e4a3e052-iqru2s
+    rootDir: tradertax-marketing
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: SCHEDULER          # the app sleeps, so an outside timer runs the jobs instead
+        value: "off"
+      - key: DATABASE_URL       # from Neon (free), you paste this in
+        sync: false
+      - key: MAILING_ADDRESS
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: ADMIN_TOKEN        # your dashboard password; Render generates it
+        generateValue: true
+      - key: APP_SECRET
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: CRON_SECRET        # the timer URL password; Render generates it
+        generateValue: true

@@ -20,6 +20,14 @@ import {
 } from './engine.js';
 
 const PUBLIC = path.join(ROOT, 'public');
+
+// One tick at a time, whether it comes from the built-in scheduler or the cron URL.
+let ticking = false;
+export async function runTick(store, now = new Date()) {
+  if (ticking) return false;
+  ticking = true;
+  try { await tick(store, now); return true; } finally { ticking = false; }
+}
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const allowedOrigins = () => (process.env.ALLOWED_ORIGINS || `${business.brand.mainSite},https://tradertaxhq.com`)
   .split(',').map((s) => s.trim()).filter(Boolean);
@@ -154,6 +162,16 @@ export function createServer(store = new Store()) {
         return send(res, 200, { ok: true, matched: true });
       }
 
+      // ---------------- external cron (free hosts that sleep): GET or POST /api/cron/tick?secret=...
+      // Point cron-job.org (or any scheduler) at this every 10 minutes. It wakes the app
+      // and runs everything that is due: emails, posts, newsletter, weekly content, reports.
+      if (url.pathname === '/api/cron/tick' && (req.method === 'GET' || req.method === 'POST')) {
+        if (!safeEqual(url.searchParams.get('secret'), process.env.CRON_SECRET)) return send(res, 401, { error: 'Unauthorized' });
+        const ran = await runTick(store);
+        await store.flush();
+        return send(res, 200, { ok: true, ran, at: new Date().toISOString() });
+      }
+
       // ---------------- admin API
       if (url.pathname.startsWith('/api/admin/')) {
         if (!isAdmin(req)) return send(res, 401, { error: 'Unauthorized' });
@@ -230,7 +248,7 @@ export function startScheduler(store, intervalMs = 60_000) {
   const run = async () => {
     if (running) return;
     running = true;
-    try { await tick(store, new Date()); } catch (err) { console.error('[scheduler]', err); } finally { running = false; }
+    try { await runTick(store); } catch (err) { console.error('[scheduler]', err); } finally { running = false; }
   };
   run();
   return setInterval(run, intervalMs);
@@ -240,8 +258,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (!process.env.ADMIN_TOKEN) console.warn('[warn] ADMIN_TOKEN is not set - the admin dashboard is locked.');
   if (!process.env.APP_SECRET) console.warn('[warn] APP_SECRET is not set - using an insecure default for unsubscribe links.');
   if (!process.env.MAILING_ADDRESS) console.warn('[warn] MAILING_ADDRESS is not set - CAN-SPAM requires a postal address in marketing emails.');
-  const store = new Store();
+  if (!process.env.CRON_SECRET && process.env.SCHEDULER === 'off') console.warn('[warn] SCHEDULER=off but CRON_SECRET is not set - nothing will run the weekly jobs.');
+  const store = await Store.open();
   const port = Number(process.env.PORT) || 3000;
-  createServer(store).listen(port, () => console.log(`${business.brand.name} marketing system on http://localhost:${port}`));
+  const server = createServer(store).listen(port, () => console.log(`${business.brand.name} marketing system on http://localhost:${port} (${process.env.DATABASE_URL ? 'postgres' : 'file'} storage)`));
   if (process.env.SCHEDULER !== 'off') startScheduler(store);
+  // Hosts stop idle apps with SIGTERM: finish saving first so no lead is lost.
+  for (const sig of ['SIGTERM', 'SIGINT']) {
+    process.on(sig, async () => { server.close(); await store.flush(); process.exit(0); });
+  }
 }

@@ -14,7 +14,7 @@ import { tick, runWeeklyContent, sendWeeklyReport, weeklyStats, approveContent, 
 import { upcomingDeadlines } from './content/topics.js';
 
 const [cmd, arg] = process.argv.slice(2);
-const store = new Store();
+const store = await Store.open();
 const now = new Date();
 
 switch (cmd) {
@@ -56,3 +56,5 @@ switch (cmd) {
     console.log('Usage: node src/cli.js <tick|generate [topicId]|report|stats [days]|topics|deadlines [days]|approve-all>');
     process.exitCode = 1;
 }
+await store.flush();
+process.exit(process.exitCode ?? 0);

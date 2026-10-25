@@ -1,6 +1,7 @@
 process.env.EMAIL_PROVIDER = 'noop';
 process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.WEBHOOK_SECRET = 'hook-secret';
+process.env.CRON_SECRET = 'cron-secret';
 delete process.env.ANTHROPIC_API_KEY;
 
 const { test } = await import('node:test');
@@ -60,6 +61,13 @@ test('HTTP funnel, main-site subscribe, webhooks and admin API', async () => {
     assert.equal(hook.status, 200);
     const dee = store.find('leads', (l) => l.email === 'dee@trader.io');
     assert.equal(dee.status, 'intake_started');
+
+    // External cron: wrong secret rejected, right secret runs due jobs (welcome email already queued for list@trader.io)
+    assert.equal((await fetch(`${base}/api/cron/tick?secret=nope`)).status, 401);
+    const tickRes = await fetch(`${base}/api/cron/tick?secret=cron-secret`);
+    assert.equal(tickRes.status, 200);
+    assert.equal((await tickRes.json()).ran, true);
+    assert.ok(store.filter('emails', (e) => e.status === 'sent').length >= 1);
 
     // Unsubscribe
     assert.equal((await fetch(`${base}/unsubscribe?id=${dee.id}&t=bad`)).status, 400);

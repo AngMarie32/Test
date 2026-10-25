@@ -4,13 +4,16 @@
   "description": "TraderTax HQ automated marketing system: lead capture, scoring, nurture email, AI content engine, social scheduling, deadline campaigns and reporting.",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "cli": "node src/cli.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.3.0"
+    "@anthropic-ai/sdk": "^1.3.0",
+    "pg": "^8.23.1"
   }
 }
