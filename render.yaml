@@ -1,0 +1,30 @@
+# Render Blueprint: one-click setup for the TraderTaxHQ marketing system.
+services:
+  - type: web
+    name: tradertaxhq-marketing
+    runtime: node
+    plan: starter            # needed for the persistent disk (about $7/month)
+    branch: ccr-e4a3e052-iqru2s
+    rootDir: tradertax-marketing
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /var/data   # keeps your leads when the app restarts
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DB_FILE
+        value: /var/data/db.json
+      - key: ADMIN_TOKEN     # your dashboard password; Render generates it for you
+        generateValue: true
+      - key: APP_SECRET
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: MAILING_ADDRESS # you fill this in during setup
+        sync: false
+      - key: PUBLIC_URL      # you fill this in after the first deploy
+        sync: false
